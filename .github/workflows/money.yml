@@ -1,4 +1,4 @@
-name: Daily Node.js Run
+name: every 10 day money_run
 
 on:
   schedule:
