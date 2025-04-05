@@ -1,0 +1,100 @@
+Moneycontrol Data Scrape - 2025-04-05T13:03:31.911Z
+
+
+================================================================================
+Symbol: 20MICRONS
+
+Strengths_Count: 10
+Strengths_Items: ["High Growth Stock with Promoters increasing shareholding","Promoter Increasing Holding","Company with high TTM EPS Growth","Effectively using Shareholders fund - Return on equity (ROE) improving since last 3 Years","Company with Low Debt","Annual EPS Improving for last 2 years","Book Value Improving for last 2 years","Company with Zero Promoter Pledge","Promoter Holding Rising QoQ","Recent Results : Rising Operating Profit margin with YoY Profit Growth"]
+Weaknesses_Count: 5
+Weaknesses_Items: ["FII/FPI decreased their shareholding last quarter","Decline in Net Profit (QoQ)","Decline in Net Profit with falling Profit Margin (QoQ)","Quarterly EPS declining for last 2 quarters","Declining profits every quarter for the past 2 quarters"]
+Opportunities_Count: 3
+Opportunities_Items: ["High ROCE, Low PE companies","Above 20 DMA","Above 50 DMA"]
+Threats_Count: 2
+Threats_Items: ["Degrowth in Revenue, Profits and Operating Profit Margin in recent results (QoQ)","Below 200 DMA"]
+MC_Essentials_Score: 69
+financials_1: true
+financials_2: true
+financials_3: false
+financials_4: false
+financials_5: false
+financials_6: true
+financials_7: true
+financials_8: true
+ownership_1: true
+ownership_2: true
+ownership_3: true
+industry_1: true
+industry_2: false
+industry_3: true
+others_1: true
+others_2: false
+Piotroski_Score: 6
+================================================================================
+
+
+================================================================================
+Symbol: 21STCENMGM
+
+Strengths_Count: 7
+Strengths_Items: ["Company with high TTM EPS Growth","Effectively using Shareholders fund - Return on equity (ROE) improving since last 3 Years","Company with Zero Promoter Pledge","Strong Annual EPS Growth","Rising Cash Flow from Operations and Low Debt","Dividend Yields High & above Long Term Dividend Yields","Growth in Quarterly Net Profit Margin with increasing Profit Margin (YoY)"]
+Weaknesses_Count: 3
+Weaknesses_Items: ["Quarterly EPS declining for last 2 quarters","Declining profits every quarter for the past 2 quarters","Declining Revenue every quarter for the past 2 quarters"]
+Opportunities_Count: 2
+Opportunities_Items: ["Stock with Low PE (PE < = 10)","Above 20 DMA"]
+Threats_Count: 4
+Threats_Items: ["Profit to Loss Companies","Negative growth with promoters decreasing shareholding","Below 200 DMA","Below 50 DMA"]
+MC_Essentials_Score: 65
+financials_1: true
+financials_2: false
+financials_3: true
+financials_4: false
+financials_5: true
+financials_6: true
+financials_7: true
+financials_8: false
+ownership_1: true
+ownership_2: true
+ownership_3: true
+industry_1: false
+industry_2: false
+industry_3: true
+others_1: true
+others_2: true
+others_3: false
+Piotroski_Score: 5
+================================================================================
+
+
+================================================================================
+Symbol: 360ONE
+
+Strengths_Count: 10
+Strengths_Items: ["Good quarterly growth in the recent results","Company with high TTM EPS Growth","Companies with rising net profit margins in both quarter and TTM","Effectively using Shareholders fund - Return on equity (ROE) improving since last 3 Years","Growth in Net Profit with increasing Profit Margin (QoQ)","FII Increasing their shareholding","Annual EPS Improving for last 2 years","Book Value Improving for last 2 years","Increasing profits every quarter for the past 4 quarters","Growth in Quarterly Net Profit Margin with increasing Profit Margin (YoY)"]
+Weaknesses_Count: 4
+Weaknesses_Items: ["Promoter decreasing their shareholding","Companies with High Debt","Companies with Increasing Debt","Companies with High Promoter Pledge"]
+Opportunities_Count: 1
+Opportunities_Items: ["Number of FII / DII / Institution holding stock increase"]
+Threats_Count: 5
+Threats_Items: ["Degrowth in Revenue, Profits and Operating Profit Margin in recent results (QoQ)","Negative growth with promoters decreasing shareholding","Below 200 DMA","Below 20 DMA","Below 50 DMA"]
+MC_Essentials_Score: 65
+financials_1: true
+financials_2: true
+financials_3: false
+financials_4: false
+financials_5: true
+financials_6: false
+financials_7: true
+financials_8: false
+ownership_1: false
+ownership_2: true
+ownership_3: true
+industry_1: true
+industry_2: true
+industry_3: true
+others_1: true
+others_2: true
+others_3: false
+Piotroski_Score: 2
+================================================================================
+

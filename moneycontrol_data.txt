@@ -1,0 +1,34 @@
+Moneycontrol Data Scrape - 2025-04-05T13:36:46.904Z
+
+
+================================================================================
+Symbol: 20MICRONS
+
+Strengths_Count: 10
+Strengths_Items: ["High Growth Stock with Promoters increasing shareholding","Promoter Increasing Holding","Company with high TTM EPS Growth","Effectively using Shareholders fund - Return on equity (ROE) improving since last 3 Years","Company with Low Debt","Annual EPS Improving for last 2 years","Book Value Improving for last 2 years","Company with Zero Promoter Pledge","Promoter Holding Rising QoQ","Recent Results : Rising Operating Profit margin with YoY Profit Growth"]
+Weaknesses_Count: 5
+Weaknesses_Items: ["FII/FPI decreased their shareholding last quarter","Decline in Net Profit (QoQ)","Decline in Net Profit with falling Profit Margin (QoQ)","Quarterly EPS declining for last 2 quarters","Declining profits every quarter for the past 2 quarters"]
+Opportunities_Count: 3
+Opportunities_Items: ["High ROCE, Low PE companies","Above 20 DMA","Above 50 DMA"]
+Threats_Count: 2
+Threats_Items: ["Degrowth in Revenue, Profits and Operating Profit Margin in recent results (QoQ)","Below 200 DMA"]
+MC_Essentials_Score: 69
+financials_1: true
+financials_2: true
+financials_3: false
+financials_4: false
+financials_5: false
+financials_6: true
+financials_7: true
+financials_8: true
+ownership_1: true
+ownership_2: true
+ownership_3: true
+industry_1: true
+industry_2: false
+industry_3: true
+others_1: true
+others_2: false
+Piotroski_Score: 6
+================================================================================
+
