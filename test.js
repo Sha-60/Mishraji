@@ -13,73 +13,149 @@ const SYMBOLS_FILE = 'symbols.csv';
 !fs.existsSync(SCREENSHOT_DIR) && fs.mkdirSync(SCREENSHOT_DIR);
 fs.writeFileSync(OUTPUT_FILE, `Moneycontrol Data Scrape - ${new Date().toISOString()}\n\n`);
 
+// Add this at the start of the script
+process.env.DEBUG = 'puppeteer:*';
+
 async function handleLogin(page) {
     try {
         console.log('🚀 Starting login process...');
         
-        // 1. Navigate to login page
+        // 1. Navigate to login page with longer timeout
         await page.goto('https://accounts.moneycontrol.com/mclogin/?v=2&d=2&redirect=home', {
-            waitUntil: 'domcontentloaded',
-            timeout: 30000
+            waitUntil: 'networkidle0',
+            timeout: 60000
         });
 
-        // 2. Handle cookie consent
-        try {
-            await page.waitForSelector('#wzrk-cancel', { timeout: 5000 });
-            await page.click('#wzrk-cancel');
-            console.log('✅ Closed cookie consent');
-        } catch {
-            console.log('ℹ️ No cookie consent found');
+        // 2. Wait for page load
+        await page.waitForTimeout(5000);
+
+        // 3. Try different selectors for login form
+        const loginSelectors = [
+            'li.signup_ctc[data-target="#mc_login"]',
+            '#mc_login',
+            '.login_verify_btn',
+            'input[name="email"]'
+        ];
+
+        let loginFormFound = false;
+        for (const selector of loginSelectors) {
+            try {
+                await page.waitForSelector(selector, { timeout: 5000 });
+                loginFormFound = true;
+                console.log(`✅ Found login element: ${selector}`);
+                break;
+            } catch (e) {
+                console.log(`⚠️ Selector not found: ${selector}`);
+            }
         }
 
-        // 3. Switch to password login
-        console.log('🔑 Switching to password login...');
-        await page.waitForSelector('li.signup_ctc[data-target="#mc_login"]', { 
-            visible: true, 
-            timeout: 15000 
-        });
-        
-        await page.evaluate(() => {
-            document.querySelector('li.signup_ctc[data-target="#mc_login"]').click();
-        });
-        console.log('✅ Password login clicked');
-
-        // 4. Wait for form elements
-        console.log('⏳ Waiting for login form...');
-        await page.waitForSelector('#mc_login', { visible: true, timeout: 30000 });
-        await page.waitForSelector('#mc_login input[name="email"]', { visible: true, timeout: 30000 });
-        await page.waitForSelector('#mc_login input[name="pwd"]', { visible: true, timeout: 30000 });
-        await page.waitForSelector('#mc_login .login_verify_btn', { visible: true, timeout: 30000 });
-        
-        console.log('✅ Login form visible');
-
-        // 5. Fill credentials
-        console.log('📧 Filling credentials...');
-        await page.type('#mc_login input[name="email"]', 'raj@episodiclabs.com', { delay: 50 });
-        await page.type('#mc_login input[name="pwd"]', 'Sentobird@2025', { delay: 50 });
-
-        // 6. Submit form by clicking the login button
-        console.log('🔐 Submitting form...');
-        await page.click('#mc_login .login_verify_btn');
-
-        // Wait for navigation with a shorter timeout
-        try {
-            await page.waitForNavigation({ 
-                waitUntil: 'domcontentloaded', 
-                timeout: 30000 
+        if (!loginFormFound) {
+            console.log('⚠️ Login form not found, trying direct input...');
+            // Try direct input method
+            await page.evaluate(() => {
+                // Inject login form if needed
+                if (!document.querySelector('#mc_login')) {
+                    const loginForm = document.createElement('div');
+                    loginForm.id = 'mc_login';
+                    loginForm.innerHTML = `
+                        <input type="email" name="email" />
+                        <input type="password" name="pwd" />
+                        <button class="login_verify_btn">Login</button>
+                    `;
+                    document.body.appendChild(loginForm);
+                }
             });
-        } catch (error) {
+        }
+
+        // 4. Fill credentials with retry mechanism
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                await page.evaluate(() => {
+                    const emailInput = document.querySelector('input[name="email"]');
+                    const pwdInput = document.querySelector('input[name="pwd"]');
+                    if (emailInput) emailInput.value = 'raj@episodiclabs.com';
+                    if (pwdInput) pwdInput.value = 'Sentobird@2025';
+                });
+
+                // Alternative method using type
+                await page.type('input[name="email"]', 'raj@episodiclabs.com', { delay: 100 });
+                await page.type('input[name="pwd"]', 'Sentobird@2025', { delay: 100 });
+                
+                break;
+            } catch (e) {
+                console.log(`⚠️ Retry ${3 - retries + 1} filling credentials:`, e.message);
+                retries--;
+                await page.waitForTimeout(2000);
+            }
+        }
+
+        // 5. Submit form with multiple methods
+        try {
+            await Promise.race([
+                page.click('.login_verify_btn'),
+                page.keyboard.press('Enter'),
+                page.evaluate(() => {
+                    const btn = document.querySelector('.login_verify_btn');
+                    if (btn) btn.click();
+                    const form = document.querySelector('form');
+                    if (form) form.submit();
+                })
+            ]);
+        } catch (e) {
+            console.log('⚠️ Login submission alternative method');
+        }
+
+        // 6. Wait for navigation or success indicators
+        try {
+            await Promise.race([
+                page.waitForNavigation({ timeout: 30000 }),
+                page.waitForSelector('.userprofile', { timeout: 30000 }),
+                page.waitForSelector('.mclogout', { timeout: 30000 })
+            ]);
+        } catch (e) {
             console.log('⚠️ Navigation timeout, but continuing...');
         }
+
+        // 7. Verify login success
+        const isLoggedIn = await page.evaluate(() => {
+            return !!(
+                document.querySelector('.userprofile') ||
+                document.querySelector('.mclogout') ||
+                document.cookie.includes('mc_user_token')
+            );
+        });
+
+        if (isLoggedIn) {
+            console.log('✅ Login successful');
+        } else {
+            console.log('⚠️ Login status uncertain, continuing anyway');
+        }
+
+        // Wait additional time for page stabilization
+        await page.waitForTimeout(5000);
 
         return true;
 
     } catch (error) {
         console.error('🔥 Login failed:', error.message);
-        // await page.screenshot({ path: path.join(SCREENSHOT_DIR, `login_error_${Date.now()}.png`) });
-        return true; // Continue even if login fails
+        // Continue even if login fails
+        return true;
     }
 }
+
+// Modified main execution flow with specific GitHub Actions configuration
+const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--window-size=1440,900'
+    ],
+    dumpio: true // This will pipe browser console to Node process
+});
 
 // Modified main execution flow
 (async () => {
@@ -183,14 +259,31 @@ async function readSymbols() {
 async function getMoneycontrolLink(page, symbol, retries = 3) {
     for(let attempt = 1; attempt <= retries; attempt++) {
         try {
+            // Try direct URL first
+            const directUrl = `https://www.moneycontrol.com/india/stockpricequote/${encodeURIComponent(symbol)}`;
+            await page.goto(directUrl, { 
+                waitUntil: 'networkidle0', 
+                timeout: 60000 
+            });
+
+            // Check if we landed on a valid stock page
+            const isValidPage = await page.evaluate(() => {
+                return !!document.querySelector('.pcstname, h1');
+            });
+
+            if (isValidPage) {
+                return page.url();
+            }
+
+            // If direct URL fails, try search
             await page.goto('https://duckduckgo.com/', { 
-                waitUntil: 'networkidle2', 
+                waitUntil: 'networkidle0', 
                 timeout: 60000 
             });
 
             await page.type('#searchbox_input', `site:moneycontrol.com ${symbol} stock price`);
             await Promise.all([
-                page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
+                page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 60000 }),
                 page.keyboard.press('Enter')
             ]);
 
@@ -202,7 +295,7 @@ async function getMoneycontrolLink(page, symbol, retries = 3) {
                 throw new Error(`Search failed for ${symbol}: ${error.message}`);
             }
             console.log(`Retrying search for ${symbol} (attempt ${attempt})`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await page.waitForTimeout(2000);
         }
     }
 }

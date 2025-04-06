@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const csv = require('csv-parser');
+const axios = require('axios');
 
 // Configure directories
 const SCREENSHOT_DIR = 'screenshots';
@@ -75,7 +76,7 @@ async function handleLogin(page) {
 
     } catch (error) {
         console.error('🔥 Login failed:', error.message);
-        await page.screenshot({ path: path.join(SCREENSHOT_DIR, `login_error_${Date.now()}.png`) });
+        // await page.screenshot({ path: path.join(SCREENSHOT_DIR, `login_error_${Date.now()}.png`) });
         return true; // Continue even if login fails
     }
 }
@@ -83,109 +84,80 @@ async function handleLogin(page) {
 // Modified main execution flow
 (async () => {
     const browser = await puppeteer.launch({
-        headless: false,
+        headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        slowMo: 50 // Adds slight delay between actions
+        slowMo: 50
     });
     
     try {
         const page = await browser.newPage();
         await page.setViewport({ width: 1440, height: 900 });
-        
-        // Set realistic user agent
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
 
-        // Step 1: Execute login flow
-        console.log('Step 1: Logging in...');
         await handleLogin(page);
-        console.log('✅ Login attempt completed');
-
-        // Step 2: Read symbols from CSV
-        console.log('Step 2: Reading symbols...');
         const symbols = await readSymbols();
-        console.log(`Found ${symbols.length} symbols to process`);
 
-        // Step 3: Process each symbol
         for(const symbol of symbols) {
-            console.log(`\nProcessing ${symbol}...`);
             try {
-                // Get company profile URL
                 const profileUrl = await getMoneycontrolLink(page, symbol);
-                console.log(`Found profile URL: ${profileUrl}`);
-
-                // Navigate to company page
-                await page.goto(profileUrl, { 
-                    waitUntil: 'domcontentloaded', 
-                    timeout: 30000 
-                });
-
-                // Wait for page to load
+                await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
                 await page.waitForSelector('.pcstname, h1', { timeout: 30000 });
                 
-                // Scrape company data
-                const companyInfo = await getCompanyInfo(page, symbol);
-                console.log('✅ Company info scraped');
-
-                // Try to get SWOT analysis
                 let swotAnalysis = [];
                 try {
                     swotAnalysis = await getSWOTAnalysis(page);
-                    console.log('✅ SWOT analysis scraped');
                 } catch (error) {
                     console.log('⚠️ Could not get SWOT analysis:', error.message);
                 }
 
-                // Try to get news
-                let news = [];
-                try {
-                    news = await getNewsData(page);
-                    console.log('✅ News data scraped');
-                } catch (error) {
-                    console.log('⚠️ Could not get news data:', error.message);
-                }
-
-                // Add this new function to scrape MC Essentials data
                 let mcEssentials = null;
                 try {
                     mcEssentials = await getMCEssentials(page);
-                    console.log('✅ MC Essentials data scraped');
                 } catch (error) {
                     console.log('⚠️ Could not get MC Essentials:', error.message);
                 }
 
-                // Format and save output
-                const output = formatOutput(symbol, {
-                    companyInfo,
+                let mcInsightsData = null;
+                try {
+                    mcInsightsData = await getFinancialsAndIndustryData(page);
+                } catch (error) {
+                    console.log('⚠️ Could not get MC Insights data:', error.message);
+                }
+
+                // Prepare API data
+                const apiData = prepareApiData(symbol, {
                     swotAnalysis,
-                    news,
-                    profileUrl,
-                    mcEssentials
+                    mcEssentials,
+                    mcInsightsData
                 });
+
+                // Send data to WordPress API
+                try {
+                    const response = await sendToWordPressApi(apiData);
+                    console.log(`✅ Data sent to API for ${symbol}:`, response.data);
+                } catch (error) {
+                    console.error(`🔥 API Error for ${symbol}:`, error.message);
+                }
                 
-                fs.appendFileSync(OUTPUT_FILE, output);
-                console.log(`✅ Successfully processed ${symbol}`);
+                // Still save to file as backup
+                // const output = formatOutput(symbol, {
+                //     swotAnalysis,
+                //     mcEssentials,
+                //     mcInsightsData
+                // });
+                // fs.appendFileSync(OUTPUT_FILE, output);
 
-                // Take screenshot
-                await page.screenshot({
-                    path: path.join(SCREENSHOT_DIR, `${symbol}_${Date.now()}.png`),
-                    fullPage: true
-                });
-
-                // Add delay between requests
                 await new Promise(resolve => setTimeout(resolve, 5000));
                 
             } catch(error) {
                 console.error(`Error processing ${symbol}:`, error.message);
-                const errorMsg = `\nERROR PROCESSING ${symbol}: ${error.message}\n\n`;
-                fs.appendFileSync(OUTPUT_FILE, errorMsg);
+                fs.appendFileSync(OUTPUT_FILE, `\nERROR PROCESSING ${symbol}: ${error.message}\n\n`);
             }
         }
-        
     } catch (error) {
         console.error('Fatal error:', error);
     } finally {
         await browser.close();
-        console.log('Scraping completed. Results saved to', OUTPUT_FILE);
     }
 })();
 
@@ -322,35 +294,6 @@ async function getSWOTAnalysis(page) {
     return swotData;
 }
 
-// Enhanced News Scraper with Article Content
-async function getNewsData(page) {
-    const newsItems = await page.$$eval('.newsblock1, .news_list li', items => 
-        items.slice(0, 5).map(item => ({
-            title: item.querySelector('h3 a')?.textContent?.trim() || 'No title',
-            url: item.querySelector('a')?.href || '#',
-            time: item.querySelector('.datetime')?.textContent?.trim() || 'N/A'
-        }))
-    );
-
-    // Scrape article content for each news item
-    for(const item of newsItems) {
-        if(item.url && item.url !== '#') {
-            try {
-                const newPage = await page.browser().newPage();
-                await newPage.goto(item.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                item.content = await newPage.$eval('h2.article_desc', el => el.textContent.trim()) || 'No content available';
-                await newPage.close();
-            } catch(error) {
-                item.content = 'Failed to retrieve article content';
-            }
-        } else {
-            item.content = 'No content available';
-        }
-    }
-
-    return newsItems;
-}
-
 // Company Data Scraper
 async function getCompanyInfo(page, symbol) {
     return page.evaluate((symbol) => {
@@ -450,65 +393,241 @@ async function getMCEssentials(page) {
     }
 }
 
-// Modify the formatOutput function to include MC Essentials data
+// Modified formatOutput function
 function formatOutput(symbol, data) {
     let output = `\n${'='.repeat(80)}\n`;
-    output += `Company: ${data.companyInfo.name.toUpperCase()} (${symbol})\n`;
-    output += `Profile URL: ${data.profileUrl}\n\n`;
+    output += `Symbol: ${symbol}\n\n`;
     
-    // Add MC Essentials section
-    if (data.mcEssentials) {
-        output += `MC Essentials:\n`;
-        output += `  Overall Score: ${data.mcEssentials.passPercentage}\n\n`;
-        
-        if (data.mcEssentials.details) {
-            output += `  Financials:\n`;
-            data.mcEssentials.details.financials.forEach(item => {
-                output += `    ${item.passed ? '✓' : '✗'} ${item.text}\n`;
-            });
-            
-            output += `\n  Ownership:\n`;
-            data.mcEssentials.details.ownership.forEach(item => {
-                output += `    ${item.passed ? '✓' : '✗'} ${item.text}\n`;
-            });
-            
-            output += `\n  Industry Comparison:\n`;
-            data.mcEssentials.details.industryComparison.forEach(item => {
-                output += `    ${item.passed ? '✓' : '✗'} ${item.text}\n`;
-            });
-            
-            output += `\n  Others:\n`;
-            data.mcEssentials.details.others.forEach(item => {
-                output += `    ${item.passed ? '✓' : '✗'} ${item.text}\n`;
-            });
-        }
-        output += '\n';
-    }
-    
-    output += `SWOT Analysis:\n`;
-    if (data.swotAnalysis.length === 0) {
-        output += `  No SWOT analysis data available\n\n`;
-    } else {
+    // SWOT Analysis - Only counts and items
+    if (data.swotAnalysis && data.swotAnalysis.length > 0) {
         data.swotAnalysis.forEach((item) => {
-            output += `  ${item.category} (${item.count})\n`;
-            output += `     Summary: ${item.summary}\n`;
-            if (item.details && item.details.length > 0) {
-                output += `     Details:\n`;
-                item.details.forEach((detail, index) => {
-                    output += `       ${index + 1}. ${detail}\n`;
-                });
-            }
-            output += '\n';
+            const count = parseInt(item.count) || 0;
+            output += `${item.category}_Count: ${count}\n`;
+            output += `${item.category}_Items: ${JSON.stringify(item.details)}\n`;
         });
     }
     
-    output += `Recent News (${data.news.length} items):\n`;
-    data.news.forEach((item, index) => {
-        output += `  ${index + 1}. [${item.time}] ${item.title}\n`;
-        output += `     ${item.content}\n`;
-        output += `     Read more: ${item.url}\n\n`;
-    });
+    // MC Essentials - Only percentage and boolean checks
+    if (data.mcEssentials) {
+        const percentageMatch = data.mcEssentials.passPercentage.match(/\d+/);
+        const percentage = percentageMatch ? percentageMatch[0] : '0';
+        output += `MC_Essentials_Score: ${percentage}\n`;
+        
+        if (data.mcEssentials.details) {
+            // Financial checks (numbered 1-8)
+            data.mcEssentials.details.financials.forEach((item, index) => {
+                output += `financials_${index + 1}: ${item.passed}\n`;
+            });
+
+            // Ownership checks (numbered 1-3)
+            data.mcEssentials.details.ownership.forEach((item, index) => {
+                output += `ownership_${index + 1}: ${item.passed}\n`;
+            });
+
+            // Industry comparison checks (numbered 1-3)
+            data.mcEssentials.details.industryComparison.forEach((item, index) => {
+                output += `industry_${index + 1}: ${item.passed}\n`;
+            });
+
+            // Others checks (numbered 1-2)
+            data.mcEssentials.details.others.forEach((item, index) => {
+                output += `others_${index + 1}: ${item.passed}\n`;
+            });
+        }
+    }
+    
+    // Only Piotroski Score
+    if (data.mcInsightsData && data.mcInsightsData.financials.piotroskiScore) {
+        output += `Piotroski_Score: ${data.mcInsightsData.financials.piotroskiScore}\n`;
+    }
     
     output += `${'='.repeat(80)}\n\n`;
     return output;
+}
+
+async function getFinancialsAndIndustryData(page) {
+    try {
+        // Wait for the MC Insights container
+        await page.waitForSelector('#mc_insight', { timeout: 5000 });
+        console.log('Found MC Insights container');
+
+        const data = await page.evaluate(() => {
+            const result = {
+                mcInsightSummary: '',
+                price: [],
+                financials: {
+                    piotroskiScore: null,
+                    piotroskiIndicates: '',
+                    threeYearCAGR: {}
+                },
+                industryComparison: []
+            };
+
+            // Get MC Insight Summary
+            const summaryDiv = document.querySelector('.mcpperf .insightRight');
+            if (summaryDiv) {
+                result.mcInsightSummary = summaryDiv.textContent.trim();
+            }
+
+            // Get Price Insights
+            const priceSection = document.querySelector('.grey_bx.mcinbx');
+            if (priceSection) {
+                const priceItems = priceSection.querySelectorAll('li');
+                priceItems.forEach(item => {
+                    const status = item.classList.contains('green') ? 'Positive' :
+                                 item.classList.contains('red') ? 'Negative' :
+                                 'Neutral';
+                    result.price.push({
+                        text: item.textContent.trim(),
+                        status: status
+                    });
+                });
+            }
+
+            // Get Financials Data
+            const financialsSection = Array.from(document.querySelectorAll('.grey_bx.mcinbx'))
+                .find(div => div.querySelector('a[href="#financials"]'));
+            
+            if (financialsSection) {
+                // Get Piotroski Score
+                const piotroskiDiv = financialsSection.querySelector('.fpioi');
+                if (piotroskiDiv) {
+                    result.financials.piotroskiScore = piotroskiDiv.querySelector('.nof')?.textContent?.trim();
+                    result.financials.piotroskiIndicates = piotroskiDiv.querySelector('p')?.textContent?.trim();
+                }
+
+                // Get 3 Year CAGR Growth
+                const cagrTable = financialsSection.querySelector('.frevdat');
+                if (cagrTable) {
+                    const rows = cagrTable.querySelectorAll('tr');
+                    rows.forEach(row => {
+                        const cells = row.querySelectorAll('td');
+                        if (cells.length === 2) {
+                            result.financials.threeYearCAGR[cells[0].textContent.trim()] = cells[1].textContent.trim();
+                        }
+                    });
+                }
+            }
+
+            // Get Industry Comparison
+            const industrySection = Array.from(document.querySelectorAll('.grey_bx.mcinbx'))
+                .find(div => div.querySelector('a[href="#peers"]'));
+            
+            if (industrySection) {
+                const items = industrySection.querySelectorAll('li');
+                items.forEach(item => {
+                    const status = item.classList.contains('green') ? 'Positive' :
+                                 item.classList.contains('red') ? 'Negative' :
+                                 item.classList.contains('nutral') ? 'Neutral' : 'Unknown';
+                    
+                    result.industryComparison.push({
+                        text: item.textContent.trim(),
+                        status: status
+                    });
+                });
+            }
+
+            return result;
+        });
+
+        return data;
+
+    } catch (error) {
+        console.log('⚠️ MC Insights data not found or error:', error.message);
+        return null;
+    }
+}
+
+// Add new function to prepare API data
+function prepareApiData(symbol, data) {
+    const apiData = {
+        symbol: symbol,
+        Strengths_Count: 0,
+        Weaknesses_Count: 0,
+        Opportunities_Count: 0,
+        Threats_Count: 0,
+        Strengths_Items: '[]',
+        Weaknesses_Items: '[]',
+        Opportunities_Items: '[]',
+        Threats_Items: '[]',
+        MC_Essentials_Score: 0,
+        Piotroski_Score: 0
+    };
+
+    // Process SWOT data
+    if (data.swotAnalysis && data.swotAnalysis.length > 0) {
+        data.swotAnalysis.forEach(item => {
+            const category = item.category;
+            const count = parseInt(item.count) || 0;
+            const details = JSON.stringify(item.details || []);
+
+            switch(category) {
+                case 'Strengths':
+                    apiData.Strengths_Count = count;
+                    apiData.Strengths_Items = details;
+                    break;
+                case 'Weaknesses':
+                    apiData.Weaknesses_Count = count;
+                    apiData.Weaknesses_Items = details;
+                    break;
+                case 'Opportunities':
+                    apiData.Opportunities_Count = count;
+                    apiData.Opportunities_Items = details;
+                    break;
+                case 'Threats':
+                    apiData.Threats_Count = count;
+                    apiData.Threats_Items = details;
+                    break;
+            }
+        });
+    }
+
+    // Process MC Essentials data
+    if (data.mcEssentials) {
+        const percentageMatch = data.mcEssentials.passPercentage.match(/\d+/);
+        apiData.MC_Essentials_Score = percentageMatch ? parseInt(percentageMatch[0]) : 0;
+
+        if (data.mcEssentials.details) {
+            // Add boolean fields
+            data.mcEssentials.details.financials.forEach((item, index) => {
+                apiData[`financials_${index + 1}`] = item.passed;
+            });
+
+            data.mcEssentials.details.ownership.forEach((item, index) => {
+                apiData[`ownership_${index + 1}`] = item.passed;
+            });
+
+            data.mcEssentials.details.industryComparison.forEach((item, index) => {
+                apiData[`industry_${index + 1}`] = item.passed;
+            });
+
+            data.mcEssentials.details.others.forEach((item, index) => {
+                apiData[`others_${index + 1}`] = item.passed;
+            });
+        }
+    }
+
+    // Add Piotroski Score
+    if (data.mcInsightsData && data.mcInsightsData.financials.piotroskiScore) {
+        apiData.Piotroski_Score = parseInt(data.mcInsightsData.financials.piotroskiScore) || 0;
+    }
+
+    return apiData;
+}
+
+// Add new function to send data to WordPress API
+async function sendToWordPressApi(data) {
+    const API_URL = 'https://profitbooking.in/wp-json/moneycon/v1/money_con';
+    
+    try {
+        const response = await axios.post(API_URL, data, {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        return response;
+    } catch (error) {
+        console.error('API Error:', error.response?.data || error.message);
+        throw error;
+    }
 }
