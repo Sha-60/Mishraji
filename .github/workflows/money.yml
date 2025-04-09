@@ -23,4 +23,4 @@ jobs:
         run: npm install
 
       - name: Run script
-        run: node test.js # Change 'index.js' to your main script file
+        run: node dukduk.js # Change 'index.js' to your main script file

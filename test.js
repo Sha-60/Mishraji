@@ -27,7 +27,7 @@ async function handleLogin(page) {
         });
 
         // 2. Wait for page load
-        await page.waitForTimeout(5000);
+        await new Promise(resolve => setTimeout(resolve, 5000))
 
         // 3. Try different selectors for login form
         const loginSelectors = [
@@ -133,7 +133,7 @@ async function handleLogin(page) {
         }
 
         // Wait additional time for page stabilization
-        await page.waitForTimeout(5000);
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
         return true;
 
@@ -144,25 +144,18 @@ async function handleLogin(page) {
     }
 }
 
-// Modified main execution flow with specific GitHub Actions configuration
-const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--window-size=1440,900'
-    ],
-    dumpio: true // This will pipe browser console to Node process
-});
-
 // Modified main execution flow
 (async () => {
     const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        slowMo: 50
+        headless: false,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--window-size=1440,900'
+        ],
+        dumpio: true // This will pipe browser console to Node process
     });
     
     try {
