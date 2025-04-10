@@ -19,8 +19,17 @@ jobs:
         with:
           node-version: 18
 
+      - name: Install Chrome
+        run: |
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt install ./google-chrome-stable_current_amd64.deb
+
       - name: Install dependencies
-        run: npm install
+        run: npm install puppeteer
 
       - name: Run script
         run: node dukduk.js # Change 'index.js' to your main script file
+
+env:
+  PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
+  NODE_OPTIONS: --max_old_space_size=4096
