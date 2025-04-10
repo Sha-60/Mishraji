@@ -25,7 +25,7 @@ jobs:
           sudo apt install ./google-chrome-stable_current_amd64.deb
 
       - name: Install dependencies
-        run: npm install puppeteer
+        run: npm install 
 
       - name: Run script
         run: node dukduk.js # Change 'index.js' to your main script file
