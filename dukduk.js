@@ -37,7 +37,7 @@ async function handleLogin(page) {
         await page.screenshot({ path: path.join(SCREENSHOT_DIR, `login_process_${Date.now()}.png`) });
         await page.waitForSelector('li.signup_ctc[data-target="#mc_login"]', { 
             visible: true, 
-            timeout: 30000 
+            timeout: 60000 
         });
         
         await page.evaluate(() => {
