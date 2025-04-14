@@ -85,7 +85,7 @@ async function handleLogin(page) {
 // Modified main execution flow
 (async () => {
     const browser = await puppeteer.launch({
-        headless: false, // Run with a visible browser
+        headless: true, // Run with a visible browser
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     
