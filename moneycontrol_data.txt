@@ -1,17 +1,2 @@
-Moneycontrol Data Scrape - 2025-04-10T11:29:34.008Z
-
-
-ERROR PROCESSING 21STCENMGM: Navigation timeout of 30000 ms exceeded
-
-
-ERROR PROCESSING 3IINFOLTD: Navigation timeout of 30000 ms exceeded
-
-
-ERROR PROCESSING 3PLAND: Navigation timeout of 30000 ms exceeded
-
-
-ERROR PROCESSING 5PAISA: Navigation timeout of 30000 ms exceeded
-
-
-ERROR PROCESSING A2ZINFRA: Navigation timeout of 30000 ms exceeded
+Moneycontrol Data Scrape - 2025-04-14T08:52:38.814Z
 

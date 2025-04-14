@@ -8,7 +8,7 @@ const axios = require('axios');
 const SCREENSHOT_DIR = 'screenshots';
 const OUTPUT_FILE = 'moneycontrol_data.txt';
 const SYMBOLS_FILE = 'symbols.csv';
-
+                                            
 // Initialize directories
 !fs.existsSync(SCREENSHOT_DIR) && fs.mkdirSync(SCREENSHOT_DIR);
 fs.writeFileSync(OUTPUT_FILE, `Moneycontrol Data Scrape - ${new Date().toISOString()}\n\n`);
