@@ -37,7 +37,7 @@ async function handleLogin(page) {
         await page.screenshot({ path: path.join(SCREENSHOT_DIR, `login_process_${Date.now()}.png`) });
         await page.waitForSelector('li.signup_ctc[data-target="#mc_login"]', { 
             visible: true, 
-            timeout: 15000 
+            timeout: 30000 
         });
         
         await page.evaluate(() => {
@@ -85,10 +85,10 @@ async function handleLogin(page) {
 // Modified main execution flow
 (async () => {
     const browser = await puppeteer.launch({
-        headless: true,
+        headless: false, // Run with a visible browser
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        slowMo: 50
     });
+    
     
     try {
         const page = await browser.newPage();
