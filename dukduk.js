@@ -17,13 +17,12 @@ async function handleLogin(page) {
     try {
         console.log('🚀 Starting login process...');
         
-        // 1. Navigate to login page
         await page.goto('https://accounts.moneycontrol.com/mclogin/?v=2&d=2&redirect=home', {
-            waitUntil: 'domcontentloaded',
-            timeout: 30000
+            waitUntil: 'networkidle2',
+            timeout: 60000 // Adjust timeout as needed
         });
 
-        // 2. Handle cookie consent
+        // Handle cookie consent if present
         try {
             await page.waitForSelector('#wzrk-cancel', { timeout: 5000 });
             await page.click('#wzrk-cancel');
@@ -32,55 +31,38 @@ async function handleLogin(page) {
             console.log('ℹ️ No cookie consent found');
         }
 
-        // 3. Switch to password login
-        console.log('🔑 Switching to password login...');
-        await page.screenshot({ path: path.join(SCREENSHOT_DIR, `login_process_${Date.now()}.png`) });
-        await page.waitForSelector('li.signup_ctc[data-target="#mc_login"]', { 
-            visible: true, 
-            timeout: 60000 
-        });
-        
-        await page.evaluate(() => {
-            document.querySelector('li.signup_ctc[data-target="#mc_login"]').click();
-        });
-        console.log('✅ Password login clicked');
-
-        // 4. Wait for form elements
-        console.log('⏳ Waiting for login form...');
-        await page.waitForSelector('#mc_login', { visible: true, timeout: 30000 });
-        await page.waitForSelector('#mc_login input[name="email"]', { visible: true, timeout: 30000 });
-        await page.waitForSelector('#mc_login input[name="pwd"]', { visible: true, timeout: 30000 });
-        await page.waitForSelector('#mc_login .login_verify_btn', { visible: true, timeout: 30000 });
-        
-        console.log('✅ Login form visible');
-
-        // 5. Fill credentials
-        console.log('📧 Filling credentials...');
-        await page.type('#mc_login input[name="email"]', 'raj@episodiclabs.com', { delay: 50 });
-        await page.type('#mc_login input[name="pwd"]', 'Sentobird@2025', { delay: 50 });
-
-        // 6. Submit form by clicking the login button
-        console.log('🔐 Submitting form...');
-        await page.click('#mc_login .login_verify_btn');
-
-        // Wait for navigation with a shorter timeout
+        // Wait for and click on password login option
         try {
-            await page.waitForNavigation({ 
-                waitUntil: 'domcontentloaded', 
-                timeout: 30000 
-            });
+            console.log('🔑 Waiting for password login option...');
+            await page.waitForSelector('li.signup_ctc[data-target="#mc_login"]', { visible: true, timeout: 120000 });
+            await page.click('li.signup_ctc[data-target="#mc_login"]');
+            console.log('✅ Password login clicked');
         } catch (error) {
-            console.log('⚠️ Navigation timeout, but continuing...');
+            console.error('🔥 Failed to find password login option:', error.message);
+            return;
         }
 
-        return true;
+        // Wait for login form elements and fill credentials
+        console.log('⏳ Waiting for login form...');
+        await page.waitForSelector('#mc_login input[name="email"]', { visible: true, timeout: 30000 });
+        await page.type('#mc_login input[name="email"]', 'raj@episodiclabs.com', { delay: 50 });
+        
+        await page.waitForSelector('#mc_login input[name="pwd"]', { visible: true, timeout: 30000 });
+        await page.type('#mc_login input[name="pwd"]', 'Sentobird@2025', { delay: 50 });
 
+        // Submit form and wait for navigation
+        console.log('🔐 Submitting login form...');
+        await Promise.all([
+            page.click('#mc_login .login_verify_btn'),
+            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 })
+        ]);
+
+        console.log('✅ Login successful');
     } catch (error) {
         console.error('🔥 Login failed:', error.message);
-        // await page.screenshot({ path: path.join(SCREENSHOT_DIR, `login_error_${Date.now()}.png`) });
-        return true; // Continue even if login fails
     }
 }
+
 
 // Modified main execution flow
 (async () => {
