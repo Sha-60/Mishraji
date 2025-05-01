@@ -4,158 +4,48 @@ const path = require('path');
 const csv = require('csv-parser');
 const axios = require('axios');
 
+// WordPress Configuration
+const WP_API_URL = 'https://profitbooking.in/wp-json/scraper/v1/moneycontrol_swot'; // Updated to match the correct route
+
+
+// SQL Table Creation Query
+/*
+CREATE TABLE moneycontrol_data (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    symbol VARCHAR(50) NOT NULL,
+    strengths_count INT,
+    strengths_summary TEXT,
+    weaknesses_count INT,
+    weaknesses_summary TEXT,
+    opportunities_count INT,
+    opportunities_summary TEXT,
+    threats_count INT,
+    threats_summary TEXT,
+    mc_essentials_score INT,
+    piotroski_score VARCHAR(10),
+    piotroski_indicates TEXT,
+    three_year_cagr JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+*/
+
 // Configure directories
-const SCREENSHOT_DIR = 'screenshots';
 const OUTPUT_FILE = 'moneycontrol_data.txt';
 const SYMBOLS_FILE = 'symbols.csv';
 
-// Initialize directories
-!fs.existsSync(SCREENSHOT_DIR) && fs.mkdirSync(SCREENSHOT_DIR);
+// Initialize output file
 fs.writeFileSync(OUTPUT_FILE, `Moneycontrol Data Scrape - ${new Date().toISOString()}\n\n`);
 
-// Add this at the start of the script
-process.env.DEBUG = 'puppeteer:*';
-
-async function handleLogin(page) {
-    try {
-        console.log('🚀 Starting login process...');
-        
-        // 1. Navigate to login page with longer timeout
-        await page.goto('https://accounts.moneycontrol.com/mclogin/?v=2&d=2&redirect=home', {
-            waitUntil: 'networkidle0',
-            timeout: 60000
-        });
-
-        // 2. Wait for page load
-        await new Promise(resolve => setTimeout(resolve, 5000))
-
-        // 3. Try different selectors for login form
-        const loginSelectors = [
-            'li.signup_ctc[data-target="#mc_login"]',
-            '#mc_login',
-            '.login_verify_btn',
-            'input[name="email"]'
-        ];
-
-        let loginFormFound = false;
-        for (const selector of loginSelectors) {
-            try {
-                await page.waitForSelector(selector, { timeout: 5000 });
-                loginFormFound = true;
-                console.log(`✅ Found login element: ${selector}`);
-                break;
-            } catch (e) {
-                console.log(`⚠️ Selector not found: ${selector}`);
-            }
-        }
-
-        if (!loginFormFound) {
-            console.log('⚠️ Login form not found, trying direct input...');
-            // Try direct input method
-            await page.evaluate(() => {
-                // Inject login form if needed
-                if (!document.querySelector('#mc_login')) {
-                    const loginForm = document.createElement('div');
-                    loginForm.id = 'mc_login';
-                    loginForm.innerHTML = `
-                        <input type="email" name="email" />
-                        <input type="password" name="pwd" />
-                        <button class="login_verify_btn">Login</button>
-                    `;
-                    document.body.appendChild(loginForm);
-                }
-            });
-        }
-
-        // 4. Fill credentials with retry mechanism
-        let retries = 3;
-        while (retries > 0) {
-            try {
-                await page.evaluate(() => {
-                    const emailInput = document.querySelector('input[name="email"]');
-                    const pwdInput = document.querySelector('input[name="pwd"]');
-                    if (emailInput) emailInput.value = 'raj@episodiclabs.com';
-                    if (pwdInput) pwdInput.value = 'Sentobird@2025';
-                });
-
-                // Alternative method using type
-                await page.type('input[name="email"]', 'raj@episodiclabs.com', { delay: 100 });
-                await page.type('input[name="pwd"]', 'Sentobird@2025', { delay: 100 });
-                
-                break;
-            } catch (e) {
-                console.log(`⚠️ Retry ${3 - retries + 1} filling credentials:`, e.message);
-                retries--;
-                await page.waitForTimeout(2000);
-            }
-        }
-
-        // 5. Submit form with multiple methods
-        try {
-            await Promise.race([
-                page.click('.login_verify_btn'),
-                page.keyboard.press('Enter'),
-                page.evaluate(() => {
-                    const btn = document.querySelector('.login_verify_btn');
-                    if (btn) btn.click();
-                    const form = document.querySelector('form');
-                    if (form) form.submit();
-                })
-            ]);
-        } catch (e) {
-            console.log('⚠️ Login submission alternative method');
-        }
-
-        // 6. Wait for navigation or success indicators
-        try {
-            await Promise.race([
-                page.waitForNavigation({ timeout: 30000 }),
-                page.waitForSelector('.userprofile', { timeout: 30000 }),
-                page.waitForSelector('.mclogout', { timeout: 30000 })
-            ]);
-        } catch (e) {
-            console.log('⚠️ Navigation timeout, but continuing...');
-        }
-
-        // 7. Verify login success
-        const isLoggedIn = await page.evaluate(() => {
-            return !!(
-                document.querySelector('.userprofile') ||
-                document.querySelector('.mclogout') ||
-                document.cookie.includes('mc_user_token')
-            );
-        });
-
-        if (isLoggedIn) {
-            console.log('✅ Login successful');
-        } else {
-            console.log('⚠️ Login status uncertain, continuing anyway');
-        }
-
-        // Wait additional time for page stabilization
-        await new Promise(resolve => setTimeout(resolve, 5000));
-
-        return true;
-
-    } catch (error) {
-        console.error('🔥 Login failed:', error.message);
-        // Continue even if login fails
-        return true;
-    }
-}
-
-// Modified main execution flow
+// Main execution flow
 (async () => {
     const browser = await puppeteer.launch({
         headless: false,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
             '--window-size=1440,900'
-        ],
-        dumpio: true // This will pipe browser console to Node process
+        ]
     });
     
     try {
@@ -163,14 +53,13 @@ async function handleLogin(page) {
         await page.setViewport({ width: 1440, height: 900 });
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
 
-        await handleLogin(page);
         const symbols = await readSymbols();
 
         for(const symbol of symbols) {
             try {
                 const profileUrl = await getMoneycontrolLink(page, symbol);
-                await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                await page.waitForSelector('.pcstname, h1', { timeout: 30000 });
+                await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+                await page.waitForSelector('.pcstname, h1', { timeout: 60000 });
                 
                 let swotAnalysis = [];
                 try {
@@ -186,37 +75,42 @@ async function handleLogin(page) {
                     console.log('⚠️ Could not get MC Essentials:', error.message);
                 }
 
-                let mcInsightsData = null;
+                let financialsData = null;
                 try {
-                    mcInsightsData = await getFinancialsAndIndustryData(page);
+                    financialsData = await getFinancialsData(page);
                 } catch (error) {
-                    console.log('⚠️ Could not get MC Insights data:', error.message);
+                    console.log('⚠️ Could not get Financials data:', error.message);
                 }
 
-                // Prepare API data
-                const apiData = prepareApiData(symbol, {
+                // Format data for WordPress storage
+                const wpPayload = {
+                    symbol: symbol,
+                    strengths_count: swotAnalysis.find(item => item.category === 'Strengths')?.count || 0,
+                    strengths_summary: swotAnalysis.find(item => item.category === 'Strengths')?.summary || '',
+                    weaknesses_count: swotAnalysis.find(item => item.category === 'Weaknesses')?.count || 0,
+                    weaknesses_summary: swotAnalysis.find(item => item.category === 'Weaknesses')?.summary || '',
+                    opportunities_count: swotAnalysis.find(item => item.category === 'Opportunities')?.count || 0,
+                    opportunities_summary: swotAnalysis.find(item => item.category === 'Opportunities')?.summary || '',
+                    threats_count: swotAnalysis.find(item => item.category === 'Threats')?.count || 0,
+                    threats_summary: swotAnalysis.find(item => item.category === 'Threats')?.summary || '',
+                    mc_essentials_score: mcEssentials?.passPercentage ? parseInt(mcEssentials.passPercentage.match(/\d+/)[0]) : 0,
+                    piotroski_score: financialsData?.piotroskiScore || '',
+                    piotroski_indicates: financialsData?.piotroskiIndicates || '',
+                    three_year_cagr: financialsData?.threeYearCAGR || {}
+                };
+
+                // Store data in WordPress
+                await storeData(wpPayload);
+
+                // Save data to file (keeping the original file output for backup)
+                const output = formatOutput(symbol, {
                     swotAnalysis,
                     mcEssentials,
-                    mcInsightsData
+                    financialsData
                 });
+                fs.appendFileSync(OUTPUT_FILE, output);
 
-                // Send data to WordPress API
-                try {
-                    const response = await sendToWordPressApi(apiData);
-                    console.log(`✅ Data sent to API for ${symbol}:`, response.data);
-                } catch (error) {
-                    console.error(`🔥 API Error for ${symbol}:`, error.message);
-                }
-                
-                // Still save to file as backup
-                // const output = formatOutput(symbol, {
-                //     swotAnalysis,
-                //     mcEssentials,
-                //     mcInsightsData
-                // });
-                // fs.appendFileSync(OUTPUT_FILE, output);
-
-                await new Promise(resolve => setTimeout(resolve, 5000));
+                await new Promise(resolve => setTimeout(resolve, 3000));
                 
             } catch(error) {
                 console.error(`Error processing ${symbol}:`, error.message);
@@ -230,7 +124,7 @@ async function handleLogin(page) {
     }
 })();
 
-// Enhanced symbol reader
+// Read symbols from CSV
 async function readSymbols() {
     return new Promise((resolve, reject) => {
         const symbols = [];
@@ -248,35 +142,18 @@ async function readSymbols() {
     });
 }
 
-// DuckDuckGo search with improved reliability
+// Get Moneycontrol link for symbol
 async function getMoneycontrolLink(page, symbol, retries = 3) {
     for(let attempt = 1; attempt <= retries; attempt++) {
         try {
-            // Try direct URL first
-            const directUrl = `https://www.moneycontrol.com/india/stockpricequote/${encodeURIComponent(symbol)}`;
-            await page.goto(directUrl, { 
-                waitUntil: 'networkidle0', 
-                timeout: 60000 
-            });
-
-            // Check if we landed on a valid stock page
-            const isValidPage = await page.evaluate(() => {
-                return !!document.querySelector('.pcstname, h1');
-            });
-
-            if (isValidPage) {
-                return page.url();
-            }
-
-            // If direct URL fails, try search
             await page.goto('https://duckduckgo.com/', { 
-                waitUntil: 'networkidle0', 
+                waitUntil: 'networkidle2', 
                 timeout: 60000 
             });
 
             await page.type('#searchbox_input', `site:moneycontrol.com ${symbol} stock price`);
             await Promise.all([
-                page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 60000 }),
+                page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
                 page.keyboard.press('Enter')
             ]);
 
@@ -288,91 +165,48 @@ async function getMoneycontrolLink(page, symbol, retries = 3) {
                 throw new Error(`Search failed for ${symbol}: ${error.message}`);
             }
             console.log(`Retrying search for ${symbol} (attempt ${attempt})`);
-            await page.waitForTimeout(2000);
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
 }
 
-// SWOT Analysis Scraper
+// Simplified SWOT Analysis Scraper - Only gets counts and titles
 async function getSWOTAnalysis(page) {
     const swotData = [];
 
     try {
-        // Wait for SWOT content container
         await page.waitForSelector('.swot_cnt', { timeout: 5000 });
         
-        // Define the SWOT categories and their corresponding selectors
-        const swotCategories = [
-            { class: 'swli1', id: 'swot_ls', name: 'Strengths', contentDiv: 'swliSDiv' },
-            { class: 'swli2', id: 'swot_lw', name: 'Weaknesses', contentDiv: 'swliWDiv' },
-            { class: 'swli3', id: 'swot_lo', name: 'Opportunities', contentDiv: 'swliODiv' },
-            { class: 'swli4', id: 'swot_lt', name: 'Threats', contentDiv: 'swliTDiv' }
-        ];
+        const swotCategories = ['swli1', 'swli2', 'swli3', 'swli4'];
+        const categoryNames = ['Strengths', 'Weaknesses', 'Opportunities', 'Threats'];
 
-        // Process each SWOT category
-        for (const category of swotCategories) {
+        for (let i = 0; i < swotCategories.length; i++) {
             try {
-                // Get category info first
                 const categoryInfo = await page.evaluate((selector) => {
                     const element = document.querySelector(`.${selector}`);
                     if (!element) return null;
-                    return {
-                        title: element.querySelector('strong')?.textContent?.trim() || '',
-                        summary: element.querySelector('em')?.textContent?.trim() || ''
-                    };
-                }, category.class);
-
-                if (!categoryInfo) continue;
-
-                // Click the category button
-                await page.evaluate((selector) => {
-                    const element = document.querySelector(`.${selector} a`);
-                    if (element) element.click();
-                }, category.class);
-
-                // Wait for content to load
-                await new Promise(resolve => setTimeout(resolve, 5000));
-
-                // Get the detailed items
-                const items = await page.evaluate((divId) => {
-                    const contentDiv = document.querySelector(`#${divId}`);
-                    if (!contentDiv) return [];
                     
-                    const items = [];
-                    const listItems = contentDiv.querySelectorAll('li');
-                    listItems.forEach(li => {
-                        const text = li.textContent.trim();
-                        if (text) items.push(text);
+                    const strongElement = element.querySelector('strong');
+                    const emElement = element.querySelector('em');
+                    
+                    return {
+                        title: strongElement?.textContent?.trim() || '',
+                        summary: emElement?.textContent?.trim() || ''
+                    };
+                }, swotCategories[i]);
+
+                if (categoryInfo) {
+                    const countMatch = categoryInfo.title.match(/\((\d+)\)/);
+                    swotData.push({
+                        category: categoryNames[i],
+                        count: countMatch ? countMatch[1] : '0',
+                        summary: categoryInfo.summary
                     });
-                    return items;
-                }, category.contentDiv);
-
-                // Extract count from title (e.g., "Strengths (10)" -> "10")
-                const countMatch = categoryInfo.title.match(/\((\d+)\)/);
-                const count = countMatch ? countMatch[1] : '0';
-
-                // Add to SWOT data
-                swotData.push({
-                    category: categoryInfo.title.replace(/\s*\(\d+\)/, ''), // Remove count from category name
-                    count: count,
-                    summary: categoryInfo.summary,
-                    details: items
-                });
-
-                // Close the category to avoid overlap
-                await page.evaluate((selector) => {
-                    const closeBtn = document.querySelector(`.${selector} .swlicl`);
-                    if (closeBtn) closeBtn.click();
-                }, category.class);
-
-                // Wait for animation to complete
-                await new Promise(resolve => setTimeout(resolve, 500));
-
+                }
             } catch (error) {
-                console.log(`⚠️ Error processing ${category.name}:`, error.message);
+                console.log(`⚠️ Error processing ${categoryNames[i]}:`, error.message);
             }
         }
-
     } catch (error) {
         console.log('⚠️ SWOT section not found or error:', error.message);
     }
@@ -380,195 +214,35 @@ async function getSWOTAnalysis(page) {
     return swotData;
 }
 
-// Company Data Scraper
-async function getCompanyInfo(page, symbol) {
-    return page.evaluate((symbol) => {
-        const cleanText = (el) => el?.textContent?.replace(/\s+/g, ' ').trim();
-        
-        return {
-            name: cleanText(document.querySelector('.pcstname') || document.querySelector('h1')) || symbol,
-            price: cleanText(document.querySelector('#nsecp')) || 'N/A',
-            change: cleanText(document.querySelector('#nsechange')) || 'N/A'
-        };
-    }, symbol);
-}
-
-// Add this new function to scrape MC Essentials data
+// Simplified MC Essentials - Only gets percentage
 async function getMCEssentials(page) {
     try {
-        // Wait for MC Essentials section
         await page.waitForSelector('.bx_mceti', { timeout: 5000 });
 
-        // Get the pass percentage first
         const passPercentage = await page.evaluate(() => {
             const element = document.querySelector('.esbx');
             if (!element) return null;
             return element.textContent.trim();
         });
 
-        // Click to open MC Essentials details
-        await page.evaluate(() => {
-            const element = document.querySelector('.arw_line');
-            if (element) element.click();
-        });
-
-        // Wait for content to load
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Get detailed analysis
-        const details = await page.evaluate(() => {
-            const data = {
-                financials: [],
-                ownership: [],
-                industryComparison: [],
-                others: []
-            };
-
-            // Helper function to determine if item is checked (has green checkmark)
-            const isChecked = (span) => {
-                return span.querySelector('svg path[style*="3BB54A"]') !== null;
-            };
-
-            // Get Financials
-            const financialsItems = document.querySelectorAll('#id_financials li');
-            financialsItems.forEach(item => {
-                data.financials.push({
-                    text: item.childNodes[0].textContent.trim(),
-                    passed: isChecked(item.querySelector('span'))
-                });
-            });
-
-            // Get Ownership
-            const ownershipItems = document.querySelectorAll('#id_ownership li');
-            ownershipItems.forEach(item => {
-                data.ownership.push({
-                    text: item.childNodes[0].textContent.trim(),
-                    passed: isChecked(item.querySelector('span'))
-                });
-            });
-
-            // Get Industry Comparison
-            const industryItems = document.querySelectorAll('#id_induscmp li');
-            industryItems.forEach(item => {
-                data.industryComparison.push({
-                    text: item.childNodes[0].textContent.trim(),
-                    passed: isChecked(item.querySelector('span'))
-                });
-            });
-
-            // Get Others
-            const otherItems = document.querySelectorAll('#id_others li');
-            otherItems.forEach(item => {
-                data.others.push({
-                    text: item.childNodes[0].textContent.trim(),
-                    passed: isChecked(item.querySelector('span'))
-                });
-            });
-
-            return data;
-        });
-
-        return {
-            passPercentage,
-            details
-        };
-
+        return { passPercentage };
     } catch (error) {
         console.log('⚠️ MC Essentials section not found or error:', error.message);
         return null;
     }
 }
 
-// Modified formatOutput function
-function formatOutput(symbol, data) {
-    let output = `\n${'='.repeat(80)}\n`;
-    output += `Symbol: ${symbol}\n\n`;
-    
-    // SWOT Analysis - Only counts and items
-    if (data.swotAnalysis && data.swotAnalysis.length > 0) {
-        data.swotAnalysis.forEach((item) => {
-            const count = parseInt(item.count) || 0;
-            output += `${item.category}_Count: ${count}\n`;
-            output += `${item.category}_Items: ${JSON.stringify(item.details)}\n`;
-        });
-    }
-    
-    // MC Essentials - Only percentage and boolean checks
-    if (data.mcEssentials) {
-        const percentageMatch = data.mcEssentials.passPercentage.match(/\d+/);
-        const percentage = percentageMatch ? percentageMatch[0] : '0';
-        output += `MC_Essentials_Score: ${percentage}\n`;
-        
-        if (data.mcEssentials.details) {
-            // Financial checks (numbered 1-8)
-            data.mcEssentials.details.financials.forEach((item, index) => {
-                output += `financials_${index + 1}: ${item.passed}\n`;
-            });
-
-            // Ownership checks (numbered 1-3)
-            data.mcEssentials.details.ownership.forEach((item, index) => {
-                output += `ownership_${index + 1}: ${item.passed}\n`;
-            });
-
-            // Industry comparison checks (numbered 1-3)
-            data.mcEssentials.details.industryComparison.forEach((item, index) => {
-                output += `industry_${index + 1}: ${item.passed}\n`;
-            });
-
-            // Others checks (numbered 1-2)
-            data.mcEssentials.details.others.forEach((item, index) => {
-                output += `others_${index + 1}: ${item.passed}\n`;
-            });
-        }
-    }
-    
-    // Only Piotroski Score
-    if (data.mcInsightsData && data.mcInsightsData.financials.piotroskiScore) {
-        output += `Piotroski_Score: ${data.mcInsightsData.financials.piotroskiScore}\n`;
-    }
-    
-    output += `${'='.repeat(80)}\n\n`;
-    return output;
-}
-
-async function getFinancialsAndIndustryData(page) {
+// Simplified Financials Data - Only gets Piotroski Score
+async function getFinancialsData(page) {
     try {
-        // Wait for the MC Insights container
         await page.waitForSelector('#mc_insight', { timeout: 5000 });
-        console.log('Found MC Insights container');
 
         const data = await page.evaluate(() => {
             const result = {
-                mcInsightSummary: '',
-                price: [],
-                financials: {
-                    piotroskiScore: null,
-                    piotroskiIndicates: '',
-                    threeYearCAGR: {}
-                },
-                industryComparison: []
+                piotroskiScore: null,
+                piotroskiIndicates: '',
+                threeYearCAGR: {}
             };
-
-            // Get MC Insight Summary
-            const summaryDiv = document.querySelector('.mcpperf .insightRight');
-            if (summaryDiv) {
-                result.mcInsightSummary = summaryDiv.textContent.trim();
-            }
-
-            // Get Price Insights
-            const priceSection = document.querySelector('.grey_bx.mcinbx');
-            if (priceSection) {
-                const priceItems = priceSection.querySelectorAll('li');
-                priceItems.forEach(item => {
-                    const status = item.classList.contains('green') ? 'Positive' :
-                                 item.classList.contains('red') ? 'Negative' :
-                                 'Neutral';
-                    result.price.push({
-                        text: item.textContent.trim(),
-                        status: status
-                    });
-                });
-            }
 
             // Get Financials Data
             const financialsSection = Array.from(document.querySelectorAll('.grey_bx.mcinbx'))
@@ -578,8 +252,8 @@ async function getFinancialsAndIndustryData(page) {
                 // Get Piotroski Score
                 const piotroskiDiv = financialsSection.querySelector('.fpioi');
                 if (piotroskiDiv) {
-                    result.financials.piotroskiScore = piotroskiDiv.querySelector('.nof')?.textContent?.trim();
-                    result.financials.piotroskiIndicates = piotroskiDiv.querySelector('p')?.textContent?.trim();
+                    result.piotroskiScore = piotroskiDiv.querySelector('.nof')?.textContent?.trim();
+                    result.piotroskiIndicates = piotroskiDiv.querySelector('p')?.textContent?.trim();
                 }
 
                 // Get 3 Year CAGR Growth
@@ -589,28 +263,10 @@ async function getFinancialsAndIndustryData(page) {
                     rows.forEach(row => {
                         const cells = row.querySelectorAll('td');
                         if (cells.length === 2) {
-                            result.financials.threeYearCAGR[cells[0].textContent.trim()] = cells[1].textContent.trim();
+                            result.threeYearCAGR[cells[0].textContent.trim()] = cells[1].textContent.trim();
                         }
                     });
                 }
-            }
-
-            // Get Industry Comparison
-            const industrySection = Array.from(document.querySelectorAll('.grey_bx.mcinbx'))
-                .find(div => div.querySelector('a[href="#peers"]'));
-            
-            if (industrySection) {
-                const items = industrySection.querySelectorAll('li');
-                items.forEach(item => {
-                    const status = item.classList.contains('green') ? 'Positive' :
-                                 item.classList.contains('red') ? 'Negative' :
-                                 item.classList.contains('nutral') ? 'Neutral' : 'Unknown';
-                    
-                    result.industryComparison.push({
-                        text: item.textContent.trim(),
-                        status: status
-                    });
-                });
             }
 
             return result;
@@ -619,101 +275,68 @@ async function getFinancialsAndIndustryData(page) {
         return data;
 
     } catch (error) {
-        console.log('⚠️ MC Insights data not found or error:', error.message);
+        console.log('⚠️ Financials data not found or error:', error.message);
         return null;
     }
 }
 
-// Add new function to prepare API data
-function prepareApiData(symbol, data) {
-    const apiData = {
-        symbol: symbol,
-        Strengths_Count: 0,
-        Weaknesses_Count: 0,
-        Opportunities_Count: 0,
-        Threats_Count: 0,
-        Strengths_Items: '[]',
-        Weaknesses_Items: '[]',
-        Opportunities_Items: '[]',
-        Threats_Items: '[]',
-        MC_Essentials_Score: 0,
-        Piotroski_Score: 0
-    };
-
-    // Process SWOT data
+// Simplified output formatter
+function formatOutput(symbol, data) {
+    let output = `\n${'='.repeat(80)}\n`;
+    output += `Symbol: ${symbol}\n\n`;
+    
+    // SWOT Analysis - Counts and summaries
     if (data.swotAnalysis && data.swotAnalysis.length > 0) {
-        data.swotAnalysis.forEach(item => {
-            const category = item.category;
-            const count = parseInt(item.count) || 0;
-            const details = JSON.stringify(item.details || []);
-
-            switch(category) {
-                case 'Strengths':
-                    apiData.Strengths_Count = count;
-                    apiData.Strengths_Items = details;
-                    break;
-                case 'Weaknesses':
-                    apiData.Weaknesses_Count = count;
-                    apiData.Weaknesses_Items = details;
-                    break;
-                case 'Opportunities':
-                    apiData.Opportunities_Count = count;
-                    apiData.Opportunities_Items = details;
-                    break;
-                case 'Threats':
-                    apiData.Threats_Count = count;
-                    apiData.Threats_Items = details;
-                    break;
+        data.swotAnalysis.forEach((item) => {
+            output += `${item.category}_Count: ${item.count}\n`;
+            if (item.summary) {
+                output += `${item.category}_Summary: ${item.summary}\n`;
             }
         });
     }
-
-    // Process MC Essentials data
-    if (data.mcEssentials) {
+    
+    // MC Essentials - Only percentage
+    if (data.mcEssentials && data.mcEssentials.passPercentage) {
         const percentageMatch = data.mcEssentials.passPercentage.match(/\d+/);
-        apiData.MC_Essentials_Score = percentageMatch ? parseInt(percentageMatch[0]) : 0;
-
-        if (data.mcEssentials.details) {
-            // Add boolean fields
-            data.mcEssentials.details.financials.forEach((item, index) => {
-                apiData[`financials_${index + 1}`] = item.passed;
-            });
-
-            data.mcEssentials.details.ownership.forEach((item, index) => {
-                apiData[`ownership_${index + 1}`] = item.passed;
-            });
-
-            data.mcEssentials.details.industryComparison.forEach((item, index) => {
-                apiData[`industry_${index + 1}`] = item.passed;
-            });
-
-            data.mcEssentials.details.others.forEach((item, index) => {
-                apiData[`others_${index + 1}`] = item.passed;
+        const percentage = percentageMatch ? percentageMatch[0] : '0';
+        output += `MC_Essentials_Score: ${percentage}\n`;
+    }
+    
+    // Financials Data
+    if (data.financialsData) {
+        if (data.financialsData.piotroskiScore) {
+            output += `Piotroski_Score: ${data.financialsData.piotroskiScore}\n`;
+        }
+        if (data.financialsData.piotroskiIndicates) {
+            output += `Piotroski_Indicates: ${data.financialsData.piotroskiIndicates}\n`;
+        }
+        if (Object.keys(data.financialsData.threeYearCAGR).length > 0) {
+            output += `Three_Year_CAGR:\n`;
+            Object.entries(data.financialsData.threeYearCAGR).forEach(([key, value]) => {
+                output += `  ${key}: ${value}\n`;
             });
         }
     }
-
-    // Add Piotroski Score
-    if (data.mcInsightsData && data.mcInsightsData.financials.piotroskiScore) {
-        apiData.Piotroski_Score = parseInt(data.mcInsightsData.financials.piotroskiScore) || 0;
-    }
-
-    return apiData;
+    
+    output += `${'='.repeat(80)}\n\n`;
+    return output;
 }
 
-// Add new function to send data to WordPress API
-async function sendToWordPressApi(data) {
-    const API_URL = 'https://profitbooking.in/wp-json/moneycon/v1/money_con';
-    
+// Function to store data in WordPress
+async function storeData(payload) {
     try {
-        const response = await axios.post(API_URL, data, {
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        return response;
+        console.log('Sending payload:', JSON.stringify(payload, null, 2));
+        
+        const response = await axios.post(WP_API_URL, payload);
+
+        console.log('API Response:', response.data);
+        return response.data;
     } catch (error) {
-        console.error('API Error:', error.response?.data || error.message);
-        throw error;
+        console.error('Storage API error:', {
+            status: error.response?.status,
+            data: error.response?.data,
+            message: error.message
+        });
+        return null;
     }
 }

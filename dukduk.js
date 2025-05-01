@@ -85,7 +85,7 @@ async function handleLogin(page) {
 // Modified main execution flow
 (async () => {
     const browser = await puppeteer.launch({
-        headless: true, // Run with a visible browser
+        headless: false, // Runx with a visible browser
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     
@@ -213,10 +213,8 @@ async function getSWOTAnalysis(page) {
     const swotData = [];
 
     try {
-        // Wait for SWOT content container
         await page.waitForSelector('.swot_cnt', { timeout: 5000 });
-        
-        // Define the SWOT categories and their corresponding selectors
+        await page.waitForSelector(".swli1")
         const swotCategories = [
             { class: 'swli1', id: 'swot_ls', name: 'Strengths', contentDiv: 'swliSDiv' },
             { class: 'swli2', id: 'swot_lw', name: 'Weaknesses', contentDiv: 'swliWDiv' },
@@ -224,64 +222,40 @@ async function getSWOTAnalysis(page) {
             { class: 'swli4', id: 'swot_lt', name: 'Threats', contentDiv: 'swliTDiv' }
         ];
 
-        // Process each SWOT category
         for (const category of swotCategories) {
             try {
-                // Get category info first
+                // Get category info
                 const categoryInfo = await page.evaluate((selector) => {
                     const element = document.querySelector(`.${selector}`);
-                    if (!element) return null;
-                    return {
+                    return element ? {
                         title: element.querySelector('strong')?.textContent?.trim() || '',
                         summary: element.querySelector('em')?.textContent?.trim() || ''
-                    };
+                    } : null;
                 }, category.class);
 
                 if (!categoryInfo) continue;
 
-                // Click the category button
-                await page.evaluate((selector) => {
-                    const element = document.querySelector(`.${selector} a`);
-                    if (element) element.click();
-                }, category.class);
+                // Click using Puppeteer's click with proper waiting
+                await page.waitForSelector(`.${category.class} a`, { visible: true });
+                await page.click(`.${category.class} a`);
 
-                // Wait for content to load
-                await new Promise(resolve => setTimeout(resolve, 5000));
+                // Wait for content to load using the specific contentDiv
+                await page.waitForSelector(`#${category.contentDiv}`, { visible: true, timeout: 100000 });
 
-                // Get the detailed items
+                // Scrape items
                 const items = await page.evaluate((divId) => {
-                    const contentDiv = document.querySelector(`#${divId}`);
-                    if (!contentDiv) return [];
-                    
-                    const items = [];
-                    const listItems = contentDiv.querySelectorAll('li');
-                    listItems.forEach(li => {
-                        const text = li.textContent.trim();
-                        if (text) items.push(text);
-                    });
-                    return items;
+                    const contentDiv = document.getElementById(divId);
+                    return contentDiv ? [...contentDiv.querySelectorAll('li')].map(li => li.textContent.trim()) : [];
                 }, category.contentDiv);
 
-                // Extract count from title (e.g., "Strengths (10)" -> "10")
-                const countMatch = categoryInfo.title.match(/\((\d+)\)/);
-                const count = countMatch ? countMatch[1] : '0';
-
-                // Add to SWOT data
+                // Extract count and clean title
+                const count = categoryInfo.title.match(/\((\d+)\)/)?.[1] || '0';
                 swotData.push({
-                    category: categoryInfo.title.replace(/\s*\(\d+\)/, ''), // Remove count from category name
-                    count: count,
+                    category: categoryInfo.title.replace(/\s*\(\d+\)/, ''),
+                    count,
                     summary: categoryInfo.summary,
-                    details: items
+                    details: items.filter(item => item)
                 });
-
-                // Close the category to avoid overlap
-                await page.evaluate((selector) => {
-                    const closeBtn = document.querySelector(`.${selector} .swlicl`);
-                    if (closeBtn) closeBtn.click();
-                }, category.class);
-
-                // Wait for animation to complete
-                await new Promise(resolve => setTimeout(resolve, 500));
 
             } catch (error) {
                 console.log(`⚠️ Error processing ${category.name}:`, error.message);
