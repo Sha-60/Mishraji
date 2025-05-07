@@ -1,50 +1,11 @@
-Moneycontrol Data Scrape - 2025-05-01T11:15:40.628Z
+Moneycontrol Data Scrape - 2025-05-06T07:14:41.935Z
 
 
-================================================================================
-Symbol: 20MICRONS
-
-Strengths_Count: 0
-Strengths_Summary: No Strength for this stock
-Weaknesses_Count: 0
-Weaknesses_Summary: No weakness for this stock
-Opportunities_Count: 4
-Opportunities_Summary: High ROCE, Low PE companies
-Threats_Count: 1
-Threats_Summary: Below 200 DMA
-MC_Essentials_Score: 69
-Piotroski_Indicates: indicates
-================================================================================
+ERROR PROCESSING 20MICRONS: Search failed for 20MICRONS: net::ERR_SSL_PROTOCOL_ERROR at https://duckduckgo.com/
 
 
-================================================================================
-Symbol: 21STCENMGM
-
-Strengths_Count: 0
-Strengths_Summary: No Strength for this stock
-Weaknesses_Count: 0
-Weaknesses_Summary: No weakness for this stock
-Opportunities_Count: 3
-Opportunities_Summary: Above 50 DMA
-Threats_Count: 2
-Threats_Summary: Below 200 DMA
-MC_Essentials_Score: 65
-Piotroski_Indicates: indicates
-================================================================================
+ERROR PROCESSING 21STCENMGM: Search failed for 21STCENMGM: net::ERR_SSL_PROTOCOL_ERROR at https://duckduckgo.com/
 
 
-================================================================================
-Symbol: 360ONE
-
-Strengths_Count: 0
-Strengths_Summary: No Strength for this stock
-Weaknesses_Count: 4
-Weaknesses_Summary: Promoter decreasing their shareholding
-Opportunities_Count: 3
-Opportunities_Summary: Above 20 DMA
-Threats_Count: 2
-Threats_Summary: Below 200 DMA
-MC_Essentials_Score: 59
-Piotroski_Indicates: indicates
-================================================================================
+ERROR PROCESSING 360ONE: Search failed for 360ONE: Attempted to use detached Frame '5CA79FCF50B08CECAC06995FE01892D3'.
 
